@@ -1,4 +1,5 @@
 import type { MetaFunction } from "@remix-run/node";
+import { v4 as uuidv4 } from "uuid";
 
 export const meta: MetaFunction = () => {
   return [
@@ -11,93 +12,170 @@ import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import {
+  ClientActionFunctionArgs,
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigate,
+} from "@remix-run/react";
+import { parseWithZod } from "@conform-to/zod";
+import { z } from "zod";
+import { useForm } from "@conform-to/react";
 import { useState } from "react";
-import { ClientActionFunctionArgs, Form } from "@remix-run/react";
+import { cn } from "~/lib/utils";
 
-interface Monster {
-  name: string;
-  attack: number;
-  defense: number;
-  speed: number;
-  hp: number;
-  image: string;
-}
+const monsterSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  attack: z.number().min(1),
+  defense: z.number().min(1),
+  speed: z.number().min(1),
+  hp: z.number().min(1),
+  image: z.string().min(1),
+});
+
+export const monstersSchema = z.array(monsterSchema);
 
 export const action = () => ({});
+
+export const clientLoader = () => {
+  const monsters = JSON.parse(sessionStorage.getItem("monsters") || "[]");
+  const parsed = monstersSchema.parse(monsters);
+  return { monsters: parsed };
+};
 
 export const clientAction = async (
   { request, serverAction }: ClientActionFunctionArgs,
 ) => {
-  const requestBody = await request.clone().formData();
-  console.log(requestBody.get("name"));
-  return await serverAction();
+  const formData = await request.clone().formData();
+  const submission = parseWithZod(formData, { schema: monsterSchema });
+
+  if (submission.status !== "success") {
+    return (submission.reply());
+  }
+  const monsters = JSON.parse(sessionStorage.getItem("monsters") || "[]");
+  monsters.push(submission.value);
+  sessionStorage.setItem("monsters", JSON.stringify(monsters));
+
+  const data = await serverAction<typeof action>();
+  return data;
 };
 
 export default function Index() {
-  const [monsters, setMonsters] = useState<Monster[]>([
-    {
-      name: "Slime",
-      attack: 10,
-      defense: 5,
-      speed: 3,
-      hp: 50,
-      image: "/placeholder.svg",
+  const { monsters } = useLoaderData<typeof clientLoader>();
+  const lastResult = useActionData<typeof clientAction>();
+  const [selectedMonsters, setSelectedMonsters] = useState<string[]>([]);
+  const navigate = useNavigate();
+  const [form, fields] = useForm({
+    // Sync the result of last submission
+    lastResult,
+
+    // Reuse the validation logic on the client
+    onValidate({ formData }) {
+      return parseWithZod(formData, { schema: monsterSchema });
     },
-    {
-      name: "Goblin",
-      attack: 15,
-      defense: 8,
-      speed: 7,
-      hp: 80,
-      image: "/placeholder.svg",
-    },
-    {
-      name: "Ogre",
-      attack: 20,
-      defense: 12,
-      speed: 4,
-      hp: 120,
-      image: "/placeholder.svg",
-    },
-  ]);
+
+    // Validate the form on blur event triggered
+    shouldValidate: "onBlur",
+    shouldRevalidate: "onInput",
+  });
+
+  const selectMonstersToFight = (monsterId: string) => {
+    if (selectedMonsters.includes(monsterId)) {
+      setSelectedMonsters(selectedMonsters.filter((m) => m !== monsterId));
+      return;
+    }
+    if (selectedMonsters.length === 2) {
+      alert("You can only select 2 monsters to fight");
+      return;
+    }
+    setSelectedMonsters([...selectedMonsters, monsterId]);
+  };
 
   return (
     <div className="container mx-auto max-w-4xl py-12">
       <div className="grid gap-8">
         <div className="bg-card p-6 rounded-lg shadow-md">
           <h1 className="text-2xl font-bold mb-4">Create Monster</h1>
-          <Form method="post" className="grid grid-cols-2 gap-4">
+          <Form
+            method="post"
+            id={form.id}
+            onSubmit={form.onSubmit}
+            noValidate
+            className="grid grid-cols-2 gap-4"
+          >
+            <input type="hidden" name="id" value={uuidv4()} />
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" name="name" placeholder="Enter monster name" />
+              <Input
+                id="name"
+                key={fields.name.key}
+                name={fields.name.name}
+                defaultValue={fields.name.initialValue}
+                placeholder="Enter monster name"
+              />
+              <span className="text-red-500">{fields.name.errors}</span>
             </div>
             <div className="space-y-2">
               <Label htmlFor="attack">Attack</Label>
               <Input
+                key={fields.attack.key}
+                name={fields.attack.name}
+                defaultValue={fields.attack.initialValue}
                 id="attack"
                 type="number"
                 placeholder="Enter attack value"
               />
+              <span className="text-red-500">{fields.attack.errors}</span>
             </div>
             <div className="space-y-2">
               <Label htmlFor="defense">Defense</Label>
               <Input
+                key={fields.defense.key}
+                name={fields.defense.name}
+                defaultValue={fields.defense.initialValue}
                 id="defense"
                 type="number"
                 placeholder="Enter defense value"
               />
+              <span className="text-red-500">{fields.defense.errors}</span>
             </div>
             <div className="space-y-2">
               <Label htmlFor="speed">Speed</Label>
-              <Input id="speed" type="number" placeholder="Enter speed value" />
+              <Input
+                key={fields.speed.key}
+                name={fields.speed.name}
+                defaultValue={fields.speed.initialValue}
+                id="speed"
+                type="number"
+                placeholder="Enter speed value"
+              />
+              <span className="text-red-500">{fields.speed.errors}</span>
             </div>
             <div className="space-y-2">
               <Label htmlFor="hp">HP</Label>
-              <Input id="hp" type="number" placeholder="Enter HP value" />
+              <Input
+                key={fields.hp.key}
+                name={fields.hp.name}
+                defaultValue={fields.hp.initialValue}
+                id="hp"
+                type="number"
+                placeholder="Enter HP value"
+              />
+              <span className="text-red-500">{fields.hp.errors}</span>
             </div>
             <div className="space-y-2">
               <Label htmlFor="image">Image URL</Label>
-              <Input id="image" placeholder="Enter image URL" />
+              <Input
+                key={fields.image.key}
+                name={fields.image.name}
+                defaultValue={fields.image.initialValue}
+                id="image"
+                placeholder="Enter image URL"
+              />
+              <span className="text-red-500">{fields.image.errors}</span>
             </div>
             <div className="mt-6 flex">
               <Button type="submit">Save Monster</Button>
@@ -105,10 +183,32 @@ export default function Index() {
           </Form>
         </div>
         <div className="bg-card p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-bold mb-4">Created Monsters</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold mb-4">Created Monsters</h2>
+            <Button
+              type="button"
+              disabled={selectedMonsters.length !== 2}
+              onClick={() =>
+                navigate(`/fight?monsters${
+                  selectedMonsters.length > 0
+                    ? `=${selectedMonsters.join(",")}`
+                    : ""
+                }`)}
+            >
+              Fight
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {monsters.map(({ name, attack, defense, speed, hp, image }) => (
-              <Card key={name}>
+            {monsters.map(({ name, attack, defense, speed, hp, image, id }) => (
+              <Card
+                className={cn(
+                  "cursor-pointer",
+                  `${selectedMonsters.includes(id) ? "bg-blue-500" : ""}`,
+                )}
+                key={name}
+                onClick={() =>
+                  selectMonstersToFight(id)}
+              >
                 <img
                   src={image}
                   width={200}
