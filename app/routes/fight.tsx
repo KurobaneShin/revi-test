@@ -5,9 +5,8 @@ import {
 } from "@remix-run/react";
 import { motion } from "framer-motion";
 import { monstersSchema } from "./_index";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { HPBar } from "~/components/HPBar";
-import { Button } from "~/components/ui/button";
 
 export const clientLoader = (args: ClientLoaderFunctionArgs) => {
   const url = new URL(args.request.url);
@@ -57,16 +56,10 @@ export default function Fight() {
   );
 
   const defineFirstAttacker = () => {
-    //monster with more speed and if equal, more attack
-    if (monster1.speed > monster2.speed) {
-      return monster1.id;
-    } else if (monster1.speed < monster2.speed) {
-      return monster2.id;
-    } else if (monster1.attack > monster2.attack) {
-      return monster1.id;
-    } else if (monster1.attack < monster2.attack) {
-      return monster2.id;
+    if (monster1.speed !== monster2.speed) {
+      return monster1.speed > monster2.speed ? monster1.id : monster2.id;
     }
+    return monster1.attack > monster2.attack ? monster1.id : monster2.id;
   };
 
   const [attackerRound, setAttackerRound] = useState(
@@ -75,10 +68,15 @@ export default function Fight() {
 
   const [rounds, setRounds] = useState(1);
 
-  const damage = (attckerNum: number, defenderNum: number) => {
-    return attckerNum - defenderNum;
+  const damage = (
+    currentHP: number,
+    attckerNum: number,
+    defenderNum: number,
+  ) => {
+    return currentHP - (attckerNum - defenderNum);
   };
-  const fight = () => {
+
+  const fight = useCallback(() => {
     if (monster1.currentHP <= 0 || monster2.currentHP <= 0) {
       return;
     }
@@ -86,8 +84,11 @@ export default function Fight() {
     if (attackerRound === monster1.id) {
       setMonster2((prevState) => ({
         ...prevState,
-        currentHP: prevState.currentHP -
-          damage(monster1.attack, monster2.defense),
+        currentHP: damage(
+          prevState.currentHP,
+          monster1.attack,
+          monster2.defense,
+        ),
       }));
 
       setRounds(rounds + 1);
@@ -97,26 +98,24 @@ export default function Fight() {
 
     setMonster1((prevState) => ({
       ...prevState,
-      currentHP: prevState.currentHP -
-        damage(monster2.attack, monster1.defense),
+      currentHP: damage(prevState.currentHP, monster2.attack, monster1.defense),
     }));
 
     setRounds(rounds + 1);
     setAttackerRound(monster1.id);
-  };
+  }, [monster1, monster2, rounds, setRounds, setAttackerRound, attackerRound]);
 
   useEffect(() => {
     if (monster1.currentHP <= 0) {
-      navigate(`/winner?monsterId=${monster2.id}`);
       setTimeout(() => {
         navigate(`/winner?monsterId=${monster2.id}`);
-      }, 600);
+      }, 1000);
       return;
     }
     if (monster2.currentHP <= 0) {
       setTimeout(() => {
         navigate(`/winner?monsterId=${monster1.id}`);
-      }, 600);
+      }, 1000);
       return;
     }
   }, [
@@ -126,6 +125,15 @@ export default function Fight() {
     monster1.id,
     monster2.id,
   ]);
+
+  useEffect(() => {
+    const clear = setTimeout(() => {
+      if (rounds) {
+        fight();
+      }
+    }, 500);
+    return () => clearTimeout(clear);
+  }, [rounds, fight]);
 
   return (
     <div className="container mx-auto py-12">
@@ -170,15 +178,6 @@ export default function Fight() {
             className="w-full max-w-xs mx-auto rounded-lg shadow-lg"
           />
         </div>
-      </div>
-
-      <div className="text-center mt-10">
-        <Button
-          onClick={fight}
-          className="px-6 py-3 bg-red-500 text-white font-bold rounded-lg shadow-lg hover:bg-red-600"
-        >
-          Fight
-        </Button>
       </div>
     </div>
   );

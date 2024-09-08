@@ -46,22 +46,23 @@ export const clientLoader = () => {
   return { monsters: parsed };
 };
 
-export const clientAction = async (
-  { request, serverAction }: ClientActionFunctionArgs,
-) => {
+const deleteMonster = async (args: ClientActionFunctionArgs) => {
+  const { request, serverAction } = args;
   const formData = await request.clone().formData();
+  const id = formData.get("id");
+  if (!id) return await serverAction<typeof action>();
+  const monsters = monstersSchema.parse(
+    JSON.parse(sessionStorage.getItem("monsters") || "[]"),
+  );
+  monsters.splice(monsters.findIndex((m) => m.id === id), 1);
+  sessionStorage.setItem("monsters", JSON.stringify(monsters));
+  return await serverAction<typeof action>();
+};
 
-  if (request.method === "DELETE") {
-    const id = formData.get("id");
-    if (!id) return await serverAction<typeof action>();
-    const monsters = monstersSchema.parse(
-      JSON.parse(sessionStorage.getItem("monsters") || "[]"),
-    );
-    monsters.splice(monsters.findIndex((m) => m.id === id), 1);
-    sessionStorage.setItem("monsters", JSON.stringify(monsters));
-    return await serverAction<typeof action>();
-  }
+const createMonster = async (args: ClientActionFunctionArgs) => {
+  const { request, serverAction } = args;
 
+  const formData = await request.clone().formData();
   const submission = parseWithZod(formData, { schema: monsterSchema });
 
   if (submission.status !== "success") {
@@ -73,6 +74,16 @@ export const clientAction = async (
 
   const data = await serverAction<typeof action>();
   return data;
+};
+
+export const clientAction = async (
+  args: ClientActionFunctionArgs,
+) => {
+  const { request } = args;
+  if (request.method === "DELETE") {
+    return await deleteMonster(args);
+  }
+  return await createMonster(args);
 };
 
 export default function Index() {
