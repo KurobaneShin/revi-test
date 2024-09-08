@@ -106,18 +106,21 @@ export default function Fight() {
   }, [monster1, monster2, rounds, setRounds, setAttackerRound, attackerRound]);
 
   useEffect(() => {
+    let clear: NodeJS.Timeout;
     if (monster1.currentHP <= 0) {
-      setTimeout(() => {
+      clear = setTimeout(() => {
         navigate(`/winner?monsterId=${monster2.id}`);
       }, 1000);
       return;
     }
     if (monster2.currentHP <= 0) {
-      setTimeout(() => {
+      clear = setTimeout(() => {
         navigate(`/winner?monsterId=${monster1.id}`);
       }, 1000);
       return;
     }
+
+    return () => clearTimeout(clear);
   }, [
     monster1.currentHP,
     monster2.currentHP,
