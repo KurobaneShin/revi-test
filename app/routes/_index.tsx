@@ -38,8 +38,6 @@ const monsterSchema = z.object({
 
 export const monstersSchema = z.array(monsterSchema);
 
-export const action = () => ({});
-
 export const clientLoader = () => {
   const monsters = JSON.parse(sessionStorage.getItem("monsters") || "[]");
   const parsed = monstersSchema.parse(monsters);
@@ -47,20 +45,20 @@ export const clientLoader = () => {
 };
 
 const deleteMonster = async (args: ClientActionFunctionArgs) => {
-  const { request, serverAction } = args;
+  const { request } = args;
   const formData = await request.clone().formData();
   const id = formData.get("id");
-  if (!id) return await serverAction<typeof action>();
+  if (!id) return {};
   const monsters = monstersSchema.parse(
     JSON.parse(sessionStorage.getItem("monsters") || "[]"),
   );
   monsters.splice(monsters.findIndex((m) => m.id === id), 1);
   sessionStorage.setItem("monsters", JSON.stringify(monsters));
-  return await serverAction<typeof action>();
+  return {};
 };
 
 const createMonster = async (args: ClientActionFunctionArgs) => {
-  const { request, serverAction } = args;
+  const { request } = args;
 
   const formData = await request.clone().formData();
   const submission = parseWithZod(formData, { schema: monsterSchema });
@@ -72,8 +70,7 @@ const createMonster = async (args: ClientActionFunctionArgs) => {
   monsters.push(submission.value);
   sessionStorage.setItem("monsters", JSON.stringify(monsters));
 
-  const data = await serverAction<typeof action>();
-  return data;
+  return {};
 };
 
 export const clientAction = async (
